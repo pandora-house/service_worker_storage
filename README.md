@@ -1,39 +1,130 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+## Service worker storage
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages).
+Implement for store data in flutter web projects when browser reload page
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages).
--->
+## Usage example
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+Create file `service_worker_storage.js` and paste to `web` folder.
 
-## Features
+```js
+// These listeners will make the service worker immediately available for the page
+self.addEventListener('install', function(event) {
+    event.waitUntil(self.skipWaiting());
+});
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+self.addEventListener('activate', function(event) {
+    event.waitUntil(self.clients.claim());
+});
 
-## Getting started
+// Global variable in the service worker
+let data = 'init data from service worker storage';
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
+// Exposed "method" for saving the data
+self.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'SET_DATA') {
+        data = event.data.data;
+    }
+    if (event.data && event.data.type === 'CLEAR_DATA') {
+        data = '';
+    }
+    if (event.data && event.data.type === 'GET_DATA') {
+        event.source.postMessage({'data': data});
+    }
+})
 ```
 
-## Additional information
+Load service worker inside `index.html`
+```html
+<head>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service_worker_storage.js', {scope: 'index.html'}).then(function (registration) {
+          console.log('ServiceWorker registration successful!')
+        }, function (err) {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
+</head>
+```
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Do whatever you want to do
+```dart
+import 'dart:collection';
+
+import 'package:flutter/material.dart';
+import 'package:service_worker_storage/service_worker_storage.dart';
+
+void main() async {
+  final worker = ServiceWorkerStorage();
+
+  await worker.init();
+
+  worker.write({'type': 'GET_DATA'});
+
+  runApp(MyApp(serviceWorkerStorage: worker));
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, required this.serviceWorkerStorage});
+
+  final ServiceWorkerStorage serviceWorkerStorage;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  var _data = '';
+
+  @override
+  void initState() {
+    super.initState();
+
+    try {
+      _read();
+    } catch (_) {}
+  }
+
+  void _read() async {
+    final data = await widget.serviceWorkerStorage.read();
+
+    setState(() {
+      if (data is LinkedHashMap<dynamic, dynamic>) {
+        if (data['data']?.isNotEmpty ?? false) {
+          setState(() {
+            _data = data['data']!;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(_data),
+              const SizedBox(
+                height: 8,
+              ),
+              ElevatedButton(
+                  onPressed: () {
+                    widget.serviceWorkerStorage
+                        .write({'type': 'SET_DATA', 'data': 'test data'});
+                  },
+                  child: const Text('WRITE DATA')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
