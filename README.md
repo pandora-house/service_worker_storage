@@ -91,14 +91,11 @@ class _MyAppState extends State<MyApp> {
   void _read() async {
     final data = await widget.serviceWorkerStorage.read();
 
+
+    if (data['data']?.isEmpty ?? true) return;
+
     setState(() {
-      if (data is LinkedHashMap<dynamic, dynamic>) {
-        if (data['data']?.isNotEmpty ?? false) {
-          setState(() {
-            _data = data['data']!;
-          });
-        }
-      }
+      _data = data['data']!;
     });
   }
 
